@@ -50,18 +50,17 @@ class clientFedNova(ClientBase):
         self._cached_train_acc = self._compute_train_accuracy()
         
         # 4. 计算归一化因子 a_i
-        # FedNova 论文公式: a_i = (tau - rho*(1-rho^tau)/(1-rho)) / (1-rho)
-        if self.rho > 0:
-            a_i = (tau - self.rho * (1 - pow(self.rho, tau)) / (1 - self.rho)) / (1 - self.rho)
+        # FedNova 论文公式: 
+        # - 无 momentum (rho=0): a_i = tau
+        # - 有 momentum (rho>0): a_i = tau / (1 - rho^tau)
+        if self.rho > 0 and self.rho < 1:
+            a_i = tau / (1.0 - pow(self.rho, tau))
         else:
             a_i = float(tau)
 
-        # 5. [核心] 原地修改模型参数，发送"归一化更新"给服务器
-        # 逻辑: W_sent = W_global + (W_trained - W_global) / a_i
-        with torch.no_grad():
-            for param, global_param in zip(self.model.parameters(), global_model_params):
-                update = param.data - global_param.data
-                param.data = global_param.data + update / a_i
+        # 5. [核心] 不修改模型参数，直接发送训练后的模型
+        # 服务器端会处理归一化
+        # 这里只需要返回 a_i 即可
 
         return np.mean(loss_logs), a_i
     

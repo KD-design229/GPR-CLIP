@@ -51,6 +51,9 @@ class SAM(torch.optim.Optimizer):
                )
         return norm
     
+    def zero_grad(self, set_to_none: bool = False):
+        self.base_optimizer.zero_grad(set_to_none=set_to_none)
+    
     # 兼容性函数，防止报错
     def load_state_dict(self, state_dict):
         super().load_state_dict(state_dict)

@@ -35,12 +35,12 @@ class clientMOON(ClientBase):
         for param in global_model.parameters(): param.requires_grad = False
         global_model.eval()
         
-        # 备份上一轮模型 (fixed) - 第一次训练时 W_old 是全零/初始值
-        # 注意：你需要确保 ClientBase 里正确维护了 self.W_old
-        # 这里为了简化，我们假设 prev_model 初始化为 global_model (第一轮时)
-        # 实际严谨实现需要 Server 下发上一轮模型，或者 Client 本地缓存
-        prev_model = copy.deepcopy(self.model) 
-        prev_model.load_state_dict(self.W_old) # 加载上一轮保存的参数
+        # 备份上一轮模型 (fixed)
+        # W_old 是字典格式 {param_name: tensor}，需要转换为 state_dict 格式
+        prev_model = copy.deepcopy(self.model)
+        # 将 W_old (named_parameters dict) 转换为 state_dict 格式
+        prev_state_dict = {name: param.data.clone() for name, param in self.W_old.items()}
+        prev_model.load_state_dict(prev_state_dict, strict=False)
         for param in prev_model.parameters(): param.requires_grad = False
         prev_model.eval()
 
@@ -62,12 +62,14 @@ class clientMOON(ClientBase):
                 loss_ce = self.loss_fn(outputs, labels)
                 
                 # 2. Contrastive Loss (MOON 核心)
-                sim_glob = self.cos(z, z_glob)
-                sim_prev = self.cos(z, z_prev)
+                # 计算余弦相似度并应用温度缩放
+                sim_glob = self.cos(z, z_glob) / self.temperature
+                sim_prev = self.cos(z, z_prev) / self.temperature
                 
+                # 构造对比损失的 logits (正样本在第0列)
                 logits_con = torch.cat([sim_glob.reshape(-1, 1), sim_prev.reshape(-1, 1)], dim=1)
                 labels_con = torch.zeros(logits_con.size(0), dtype=torch.long).to(self.device)
-                loss_con = self.loss_fn(logits_con / self.temperature, labels_con)
+                loss_con = self.loss_fn(logits_con, labels_con)
 
                 # Total Loss
                 loss = loss_ce + self.mu * loss_con

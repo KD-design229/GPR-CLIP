@@ -60,34 +60,37 @@ class FedNova(ServerBase):
             self.client_train_loss_logs.append(loss_logs)
             self.client_train_acc_logs.append(train_acc_logs)
 
-            # 5. 接收模型
-            self.receive_models()
-            
-            # 6. FedNova 特殊聚合
-            # 备份旧的全局模型 W_old
+            # 5. 备份全局模型（在接收客户端模型前）
             w_old_state = copy.deepcopy(self.global_model.state_dict())
             
-            # 调用基类的 aggregated()
-            # 此时 self.global_model 变成: W_old + sum(p_i * (W_i - W_old)/a_i)
-            super().aggregated()
+            # 6. 接收客户端模型
+            self.receive_models()
             
-            # 7. 计算有效全局步长 tau_eff
-            # tau_eff = sum(p_i * a_i)
+            # 7. 计算客户端权重和 tau_eff
             total_data = sum(self.receive_client_datasize)
             fed_avg_freqs = {
                 idx: self.clientsObj[idx].data_size / total_data 
                 for idx in self.selected_clients_idx
             }
             
+            # tau_eff = sum(p_i * tau_i)
             tau_eff = sum([fed_avg_freqs[idx] * self.client_ai_values[idx] for idx in self.selected_clients_idx])
             
-            # 8. 应用最终缩放
-            # W_final = W_old + tau_eff * (W_aggregated - W_old)
-            w_new_state = self.global_model.state_dict()
+            # 8. FedNova 聚合: W_new = W_old + (1/tau_eff) * sum(p_i * tau_i * (W_i - W_old))
+            # 等价于: W_new = W_old + sum((p_i * tau_i / tau_eff) * (W_i - W_old))
+            w_new_state = copy.deepcopy(w_old_state)
             
             for key in w_new_state:
-                update = w_new_state[key] - w_old_state[key]
-                w_new_state[key] = w_old_state[key] + tau_eff * update
+                weighted_sum = torch.zeros_like(w_new_state[key])
+                for idx in self.selected_clients_idx:
+                    client_state = self.receive_clients_model[idx].state_dict()
+                    # 计算归一化权重: p_i * tau_i / tau_eff
+                    normalized_weight = fed_avg_freqs[idx] * self.client_ai_values[idx] / tau_eff
+                    # 累加加权更新
+                    weighted_sum += normalized_weight * (client_state[key] - w_old_state[key])
+                
+                # 更新全局模型
+                w_new_state[key] = w_old_state[key] + weighted_sum
             
             self.global_model.load_state_dict(w_new_state)
 
