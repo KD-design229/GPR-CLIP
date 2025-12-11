@@ -1,0 +1,58 @@
+digraph FedCLIPArchitecture {
+    rankdir=LR;
+    node [shape=box, style="rounded,filled", fillcolor=lightblue, fontname="Arial"];
+    
+    Input [label="输入图像\n224×224×3", shape=parallelogram, fillcolor=lightgreen];
+    
+    subgraph cluster_clip {
+        label="CLIP Backbone (冻结)";
+        style=filled;
+        fillcolor=lightgray;
+        
+        ImageEncoder [label="Image Encoder\nViT-B/32"];
+        ImageFeatures [label="图像特征\n512D"];
+        
+        ImageEncoder -> ImageFeatures;
+    }
+    
+    subgraph cluster_adapter {
+        label="Trainable Adapter";
+        style=filled;
+        fillcolor=lightyellow;
+        
+        MLP1 [label="MaskedMLP\n(512→512)"];
+        BN [label="BatchNorm1d"];
+        ReLU [label="ReLU"];
+        MLP2 [label="MaskedMLP\n(512→512)"];
+        Softmax [label="Softmax"];
+        
+        MLP1 -> BN -> ReLU -> MLP2 -> Softmax;
+    }
+    
+    Multiply [label="Element-wise\nMultiply", shape=circle];
+    Normalize [label="L2 Normalize"];
+    
+    subgraph cluster_text {
+        label="Text Features";
+        style=filled;
+        fillcolor=lightcyan;
+        
+        Prompts [label="Text Prompts\n(8 classes)"];
+        TextEncoder [label="Text Encoder\n(冻结)"];
+        TextFeatures [label="文本特征\n[8, 512]"];
+        
+        Prompts -> TextEncoder -> TextFeatures;
+    }
+    
+    Similarity [label="Cosine Similarity\nlogit_scale * (img @ txt.T)", shape=ellipse];
+    Output [label="输出Logits\n[B, 8]", shape=parallelogram, fillcolor=lightcoral];
+    
+    Input -> ImageEncoder;
+    ImageFeatures -> MLP1;
+    ImageFeatures -> Multiply;
+    Softmax -> Multiply;
+    Multiply -> Normalize;
+    Normalize -> Similarity;
+    TextFeatures -> Similarity;
+    Similarity -> Output;
+}

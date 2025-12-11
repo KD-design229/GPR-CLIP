@@ -1,0 +1,53 @@
+digraph SystemArchitecture {
+    rankdir=TB;
+    node [shape=box, style=filled, fillcolor=lightblue, fontname="Arial"];
+    
+    subgraph cluster_0 {
+        label="Server Layer";
+        style=filled;
+        fillcolor=lightgray;
+        
+        ServerBase [label="ServerBase\n(基础服务器类)", fillcolor=lightgreen];
+        FedDWA [label="FedDWA\n(动态权重聚合)"];
+        FedAvg [label="FedAvg\n(联邦平均)"];
+        FedProx [label="FedProx\n(近端正则化)"];
+    }
+    
+    subgraph cluster_1 {
+        label="Client Layer";
+        style=filled;
+        fillcolor=lightgray;
+        
+        ClientBase [label="ClientBase\n(基础客户端类)", fillcolor=lightgreen];
+        ClientDWA [label="ClientFedDWA\n(两步训练)"];
+        ClientAvg [label="ClientFedAvg\n(标准训练)"];
+    }
+    
+    subgraph cluster_2 {
+        label="Model Layer";
+        style=filled;
+        fillcolor=lightgray;
+        
+        CNN [label="CIFAR10Model\n(基础CNN)"];
+        ResNet [label="ResNet18\n(残差网络)"];
+        MobileViT [label="MobileViT\n(Vision Transformer)"];
+        FedCLIP [label="FedCLIP\n(多模态CLIP)"];
+        GPRFed [label="GPR-FedSense\n(探地雷达)"];
+    }
+    
+    ServerBase -> FedDWA [label="继承"];
+    ServerBase -> FedAvg [label="继承"];
+    ServerBase -> FedProx [label="继承"];
+    
+    ClientBase -> ClientDWA [label="继承"];
+    ClientBase -> ClientAvg [label="继承"];
+    
+    FedDWA -> ClientDWA [label="交互", style=dashed, color=red];
+    FedAvg -> ClientAvg [label="交互", style=dashed, color=red];
+    
+    ClientDWA -> CNN [label="使用", style=dashed, color=blue];
+    ClientDWA -> ResNet [label="使用", style=dashed, color=blue];
+    ClientDWA -> MobileViT [label="使用", style=dashed, color=blue];
+    ClientDWA -> FedCLIP [label="使用", style=dashed, color=blue];
+    ClientDWA -> GPRFed [label="使用", style=dashed, color=blue];
+}
