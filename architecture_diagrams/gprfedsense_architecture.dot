@@ -1,0 +1,65 @@
+digraph GPRFedSenseArchitecture {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fillcolor=lightblue, fontname="Arial"];
+    
+    Input [label="GPR图像\n224×224×3", shape=parallelogram, fillcolor=lightgreen];
+    
+    subgraph cluster_local {
+        label="Module 1: 本地私有层 (不聚合)";
+        style=filled;
+        fillcolor=lightyellow;
+        
+        SignalNorm [label="GPRSignalNorm\n可学习的 γ,β,gain"];
+        Stage1 [label="Stage1\nConv → BN → ReLU"];
+        TimeConv [label="时间域卷积\n5×1 kernel"];
+        SpatialConv [label="空间域卷积\n1×5 kernel"];
+        Fusion [label="特征融合\nConcat + Conv1×1"];
+        
+        SignalNorm -> Stage1;
+        Stage1 -> TimeConv;
+        Stage1 -> SpatialConv;
+        TimeConv -> Fusion;
+        SpatialConv -> Fusion;
+    }
+    
+    subgraph cluster_shared {
+        label="Module 2: 全局共享层 (联邦聚合)";
+        style=filled;
+        fillcolor=lightcyan;
+        
+        Backbone [label="Shared Backbone\nCNN / ResNet18 / MobileViT"];
+        AvgPool [label="AdaptiveAvgPool2d\n→ 512D"];
+        
+        Backbone -> AvgPool;
+    }
+    
+    subgraph cluster_head {
+        label="Module 3: 个性化分类头 (ALA聚合)";
+        style=filled;
+        fillcolor=lightcoral;
+        
+        Dropout1 [label="Dropout(0.2)"];
+        FC1 [label="FC(512→256)"];
+        ReLU1 [label="ReLU"];
+        Dropout2 [label="Dropout(0.1)"];
+        FC2 [label="FC(256→8)"];
+        
+        Dropout1 -> FC1 -> ReLU1 -> Dropout2 -> FC2;
+    }
+    
+    Output [label="输出Logits\n[B, 8]", shape=parallelogram, fillcolor=lightgreen];
+    
+    Input -> SignalNorm;
+    Fusion -> Backbone;
+    AvgPool -> Dropout1;
+    FC2 -> Output;
+    
+    // 添加说明
+    Note1 [label="设备适配\n信号归一化", shape=note, fillcolor=white];
+    Note2 [label="知识共享\n通用特征", shape=note, fillcolor=white];
+    Note3 [label="个性化\nNon-IID处理", shape=note, fillcolor=white];
+    
+    Note1 -> SignalNorm [style=dashed, color=gray];
+    Note2 -> Backbone [style=dashed, color=gray];
+    Note3 -> FC1 [style=dashed, color=gray];
+}

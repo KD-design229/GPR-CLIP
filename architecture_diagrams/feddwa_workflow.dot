@@ -1,0 +1,40 @@
+digraph FedDWAWorkflow {
+    rankdir=TB;
+    node [shape=box, style="rounded,filled", fillcolor=lightblue, fontname="Arial"];
+    
+    Start [label="开始\n(Round t)", shape=ellipse, fillcolor=lightgreen];
+    SelectClient [label="Server选择K个客户端"];
+    SendModel [label="Server发送模型 w_i^{t-1}"];
+    
+    subgraph cluster_client {
+        label="Client i 本地训练";
+        style=filled;
+        fillcolor=lightyellow;
+        
+        Train1 [label="训练E个epoch\n→ 得到 w_i^t"];
+        Train2 [label="额外训练1步\n→ 得到 w_i^{t+1}"];
+        Upload [label="上传 (w_i^t, w_i^{t+1})"];
+        
+        Train1 -> Train2;
+        Train2 -> Upload;
+    }
+    
+    CalcWeight [label="Server计算权重矩阵\nW[j,i] ∝ 1/||w_i^{t+1} - w_j^t||²"];
+    TopK [label="Top-K选择 + 归一化"];
+    Aggregate [label="个性化聚合\nw_i^{new} = Σ W[j,i]*w_j^t"];
+    SendNew [label="发送个性化模型 w_i^{new}"];
+    
+    Decision [label="达到T轮?", shape=diamond, fillcolor=lightcoral];
+    End [label="结束", shape=ellipse, fillcolor=lightcoral];
+    
+    Start -> SelectClient;
+    SelectClient -> SendModel;
+    SendModel -> Train1;
+    Upload -> CalcWeight;
+    CalcWeight -> TopK;
+    TopK -> Aggregate;
+    Aggregate -> SendNew;
+    SendNew -> Decision;
+    Decision -> SelectClient [label="否"];
+    Decision -> End [label="是"];
+}
